@@ -3,6 +3,8 @@
 **Status:** implemented API contracts, including `GET /api/chain-heads` added
 2026-09-26. This document does not describe roadmap capabilities.
 
+**OpenAPI schema:** [`openapi.yaml`](../openapi.yaml) — machine-readable contract for the six endpoints `/api/corridor`, `/api/corridor/trend`, `/api/chain-heads`, `/api/assets`, `/api/market-structure`, and `/healthz` (money fields typed as decimal strings).
+
 All endpoints are read-only. The service does not hold funds, issue tokens, sign transactions, or execute payments.
 
 ## Endpoints

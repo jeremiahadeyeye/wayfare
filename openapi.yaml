@@ -1,0 +1,749 @@
+openapi: 3.0.3
+info:
+  title: Corridor Measurement API
+  version: 1.0.0
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  description: |
+    Machine-readable contract for the public GET endpoints. Prose reference:
+    `docs/api.md`. Money fields are decimal strings (see `#/components/schemas/DecimalString`).
+servers:
+  - url: https://wayfare-cdb9.onrender.com
+    description: Production
+  - url: http://127.0.0.1:8080
+    description: Local development
+security: []
+tags:
+  - name: Corridor
+    description: Corridor measurement and trend endpoints.
+  - name: Reference
+    description: Chain-head reference endpoints.
+  - name: Assets
+    description: Asset and market-structure endpoints.
+  - name: Health
+    description: Service health endpoints.
+paths:
+  /api/corridor:
+    get:
+      tags: [Corridor]
+      summary: Measure a corridor at a set of sizes
+      operationId: getCorridor
+      parameters:
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/To'
+        - $ref: '#/components/parameters/Sizes'
+        - $ref: '#/components/parameters/Live'
+        - $ref: '#/components/parameters/Pretty'
+      responses:
+        '200':
+          description: Corridor measurement
+          headers:
+            ETag:
+              description: Present only for stored (non-live) responses.
+              schema: { type: string }
+            Cache-Control:
+              description: Present only for stored (non-live) responses.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Corridor'
+        '304':
+          description: Not modified (stored response with matching ETag)
+          headers:
+            ETag:
+              schema: { type: string }
+            Cache-Control:
+              schema: { type: string }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NoHistory'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '502':
+          $ref: '#/components/responses/MeasurementFailed'
+        '504':
+          $ref: '#/components/responses/UpstreamTimeout'
+  /api/corridor/trend:
+    get:
+      tags: [Corridor]
+      summary: Historical trend for a corridor
+      operationId: getCorridorTrend
+      parameters:
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/To'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Before'
+        - $ref: '#/components/parameters/Pretty'
+      responses:
+        '200':
+          description: Trend document
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trend'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/StoreReadError'
+
+  /api/chain-heads:
+    get:
+      tags: [Reference]
+      summary: Latest sequence number per corridor
+      operationId: getChainHeads
+      parameters:
+        - $ref: '#/components/parameters/Pretty'
+      responses:
+        '200':
+          description: Chain heads
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChainHeads'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/StoreReadError'
+
+  /api/assets:
+    get:
+      tags: [Assets]
+      summary: Known assets and destination eligibility
+      operationId: getAssets
+      parameters:
+        - $ref: '#/components/parameters/Pretty'
+      responses:
+        '200':
+          description: Assets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/StoreReadError'
+
+  /api/market-structure:
+    get:
+      tags: [Assets]
+      summary: Issuer concentration and corridor counts
+      operationId: getMarketStructure
+      parameters:
+        - $ref: '#/components/parameters/Pretty'
+      responses:
+        '200':
+          description: Market structure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketStructure'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /healthz:
+    get:
+      tags: [Health]
+      summary: Health and data freshness
+      operationId: getHealthz
+      parameters:
+        - $ref: '#/components/parameters/Pretty'
+      responses:
+        '200':
+          description: Health
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    head:
+      tags: [Health]
+      operationId: headHealthz
+      summary: Health (HEAD)
+      responses:
+        '200':
+          description: OK
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+components:
+  parameters:
+    From:
+      name: from
+      in: query
+      required: false
+      schema: { type: string, default: USDC }
+      description: Send asset code (default USDC).
+    To:
+      name: to
+      in: query
+      required: false
+      schema: { type: string, default: NGNC }
+      description: Receive asset code (default NGNC).
+    Sizes:
+      name: sizes
+      in: query
+      required: false
+      schema: { type: string }
+      description: Comma-separated send amounts (max 24). Default sizes.
+    Live:
+      name: live
+      in: query
+      required: false
+      schema: { type: string }
+      description: Presence (any non-empty value) forces a live measurement.
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+      description: Max runs to return (default 100, max 500).
+    Before:
+      name: before
+      in: query
+      required: false
+      schema: { type: integer, format: int64, minimum: 1 }
+      description: Cursor; return runs before this sequence number.
+    Pretty:
+      name: pretty
+      in: query
+      required: false
+      schema: { type: string }
+      description: Presence requests indented JSON.
+
+  responses:
+    BadRequest:
+      description: Bad request (error code in body)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    MethodNotAllowed:
+      description: Method not allowed
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    RateLimited:
+      description: Rate limited
+      headers:
+        Retry-After:
+          schema: { type: integer }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NoHistory:
+      description: No history available (code no_history)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    MeasurementFailed:
+      description: Measurement failed (code measurement_failed)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    UpstreamTimeout:
+      description: Upstream timeout
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/UpstreamTimeoutError' }
+    StoreReadError:
+      description: Store read error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    DecimalString:
+      type: string
+      pattern: '^-?[0-9]+(\.[0-9]+)?$'
+      description: Decimal number as a string.
+    Error:
+      type: object
+      required: [error, code]
+      properties:
+        error: { type: string }
+        code: { type: string }
+    UpstreamTimeoutError:
+      allOf:
+        - $ref: '#/components/schemas/Error'
+        - type: object
+          properties:
+            budget: { type: string }
+            rungs_requested: { type: integer }
+            rungs_completed:
+              type: array
+              items: { type: string }
+    Asset:
+      type: object
+      required: [code]
+      properties:
+        code: { type: string }
+        issuer: { type: string }
+        issuer_unknown: { type: boolean }
+        peg: { type: string }
+        asset: { type: string }
+    Integrity:
+      type: string
+      enum: [DIRECT, DERIVATIVE, NO-MARKET, UNKNOWN]
+    Verdict:
+      type: string
+      enum: [GOOD, FAIR, POOR, UNUSABLE, UNKNOWN]
+    Agreement:
+      type: string
+      enum: [AGREE, DISAGREE, STALE, MALFUNCTION, SINGLE, UNKNOWN]
+    CostComponent:
+      type: string
+      enum: [fx_loss, network_fees, anchor_fee, slippage, expected_failure]
+    ParallelStatus:
+      type: string
+      enum: [REPORTED, UNABLE-TO-DETERMINE]
+    QuoteKind:
+      type: string
+      enum: [dex, anchor-sep38]
+    AssetState:
+      type: object
+      properties:
+        has_history: { type: boolean }
+        last_integrity: { $ref: '#/components/schemas/Integrity' }
+        last_measured: { type: string, format: date-time }
+    DependencyChain:
+      type: object
+      required: [depth, depends_on]
+      properties:
+        depth: { type: integer }
+        depends_on:
+          type: array
+          items: { $ref: '#/components/schemas/DependencyNode' }
+    DependencyNode:
+      type: object
+      required: [code, integrity, measured]
+      properties:
+        code: { type: string }
+        issuer: { type: string }
+        peg: { type: string }
+        integrity: { $ref: '#/components/schemas/Integrity' }
+        measured: { type: boolean }
+        reason: { type: string }
+        dependencies:
+          type: array
+          items: { $ref: '#/components/schemas/DependencyNode' }
+    Stale:
+      type: object
+      required: [recorded_at, age_seconds, age_human]
+      properties:
+        recorded_at: { type: string, format: date-time }
+        age_seconds: { type: integer, format: int64 }
+        age_human: { type: string }
+    Correction:
+      type: object
+      required: [reason]
+      properties:
+        target_seq: { type: integer, format: int64 }
+        corrected_by_seq: { type: integer, format: int64 }
+        reason: { type: string }
+        is_correction: { type: boolean }
+        corrected: { type: boolean }
+        original_floor_loss_pct: { $ref: '#/components/schemas/DecimalString' }
+        corrected_floor_loss_pct: { $ref: '#/components/schemas/DecimalString' }
+        original_worst_loss_pct: { $ref: '#/components/schemas/DecimalString' }
+        corrected_worst_loss_pct: { $ref: '#/components/schemas/DecimalString' }
+    CostPart:
+      type: object
+      required: [component, determined]
+      properties:
+        component: { $ref: '#/components/schemas/CostComponent' }
+        amount: { $ref: '#/components/schemas/DecimalString' }
+        pct: { $ref: '#/components/schemas/DecimalString' }
+        determined: { type: boolean }
+        reason: { type: string }
+    CostBlock:
+      type: object
+      required: [parts, total_loss_pct]
+      properties:
+        parts:
+          type: array
+          items: { $ref: '#/components/schemas/CostPart' }
+        total_loss_pct: { $ref: '#/components/schemas/DecimalString' }
+    Quote:
+      type: object
+      required: [kind, description, hops, source, receive_amount, effective_rate, loss_pct, verdict, warnings]
+      properties:
+        kind: { $ref: '#/components/schemas/QuoteKind' }
+        description: { type: string }
+        hops:
+          nullable: true
+          type: array
+          items: { $ref: '#/components/schemas/Asset' }
+        source: { type: string }
+        receive_amount: { $ref: '#/components/schemas/DecimalString' }
+        effective_rate: { $ref: '#/components/schemas/DecimalString' }
+        loss_pct: { $ref: '#/components/schemas/DecimalString' }
+        loss_amount: { $ref: '#/components/schemas/DecimalString' }
+        verdict: { $ref: '#/components/schemas/Verdict' }
+        path_count: { type: integer }
+        warnings:
+          type: array
+          items: { type: string }
+    Rung:
+      type: object
+      required: [send_amount, priced, integrity, quote, notes]
+      properties:
+        send_amount: { $ref: '#/components/schemas/DecimalString' }
+        marginal_cost: { $ref: '#/components/schemas/DecimalString' }
+        marginal_from: { $ref: '#/components/schemas/DecimalString' }
+        marginal_to: { $ref: '#/components/schemas/DecimalString' }
+        priced: { type: boolean }
+        integrity: { $ref: '#/components/schemas/Integrity' }
+        path_count: { type: integer }
+        quote:
+          nullable: true
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/Quote'
+        cost: { $ref: '#/components/schemas/CostBlock' }
+        notes:
+          type: array
+          items: { type: string }
+        error: { type: string }
+        ledger: { type: integer, format: int64 }
+    Finding:
+      type: object
+      required: [id, scope, subject, severity, determined, passed, summary, evidence, observed_at]
+      properties:
+        id: { type: string }
+        scope: { type: string }
+        subject: { type: string }
+        severity: { type: string }
+        determined: { type: boolean }
+        passed: { type: boolean }
+        reason: { type: string }
+        summary: { type: string }
+        evidence:
+          type: array
+          items: { $ref: '#/components/schemas/Evidence' }
+        observed_at: { type: string, format: date-time }
+    Evidence:
+      type: object
+      required: [source, observed, observed_at]
+      properties:
+        source: { type: string }
+        observed: { type: string }
+        observed_at: { type: string, format: date-time }
+    Metric:
+      type: object
+      required: [id, scope, subject, determined, unit, summary, evidence, observed_at]
+      properties:
+        id: { type: string }
+        scope: { type: string }
+        subject: { type: string }
+        determined: { type: boolean }
+        reason: { type: string }
+        value: { $ref: '#/components/schemas/DecimalString' }
+        unit: { type: string }
+        venue: { type: string }
+        summary: { type: string }
+        evidence:
+          type: array
+          items: { $ref: '#/components/schemas/Evidence' }
+        observed_at: { type: string, format: date-time }
+    Findings:
+      type: object
+      required: [checks, passed, failed, undetermined]
+      properties:
+        checks:
+          type: array
+          items: { $ref: '#/components/schemas/Finding' }
+        passed: { type: integer }
+        failed: { type: integer }
+        undetermined: { type: integer }
+        worst_severity: { type: string }
+        metrics:
+          type: array
+          items: { $ref: '#/components/schemas/Metric' }
+    Corridor:
+      type: object
+      required: [send_asset, receive_asset, integrity, depends_on, reference_mid, reference_source, reference_pair, reference_agreement, scored, floor_loss_pct, floor_size, worst_loss_pct, worst_size, recommended, live, finding, curve, rungs, measured_at]
+      properties:
+        send_asset: { $ref: '#/components/schemas/Asset' }
+        receive_asset: { $ref: '#/components/schemas/Asset' }
+        integrity: { $ref: '#/components/schemas/Integrity' }
+        depends_on:
+          type: array
+          items: { $ref: '#/components/schemas/Asset' }
+        dependency_chain: { $ref: '#/components/schemas/DependencyChain' }
+        reference_mid: { $ref: '#/components/schemas/DecimalString' }
+        reference_source: { type: string }
+        reference_pair: { type: string }
+        reference_secondary_mid: { $ref: '#/components/schemas/DecimalString' }
+        reference_secondary_source: { type: string }
+        reference_divergence_pct: { $ref: '#/components/schemas/DecimalString' }
+        reference_note: { type: string }
+        reference_diagnostic:
+          type: object
+          properties:
+            source: { type: string }
+            mid: { $ref: '#/components/schemas/DecimalString' }
+            as_of: { type: string, format: date-time }
+            outlier: { type: string }
+            outlier_distance_pct: { $ref: '#/components/schemas/DecimalString' }
+            other_distance_pct: { $ref: '#/components/schemas/DecimalString' }
+            reason: { type: string }
+        reference_as_of: { type: string, format: date-time }
+        reference_secondary_as_of: { type: string, format: date-time }
+        reference_fetched_at: { type: string, format: date-time }
+        reference_agreement: { $ref: '#/components/schemas/Agreement' }
+        scored: { type: boolean }
+        parallel_status: { $ref: '#/components/schemas/ParallelStatus' }
+        parallel_mid: { $ref: '#/components/schemas/DecimalString' }
+        parallel_source: { type: string }
+        parallel_gap_pct: { $ref: '#/components/schemas/DecimalString' }
+        parallel_reason: { type: string }
+        floor_loss_pct: { $ref: '#/components/schemas/DecimalString' }
+        floor_size: { $ref: '#/components/schemas/DecimalString' }
+        worst_loss_pct: { $ref: '#/components/schemas/DecimalString' }
+        worst_size: { $ref: '#/components/schemas/DecimalString' }
+        recommended:
+          nullable: true
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/Quote'
+        recommended_size: { $ref: '#/components/schemas/DecimalString' }
+        live: { type: boolean }
+        finding: { type: string }
+        stale: { $ref: '#/components/schemas/Stale' }
+        correction: { $ref: '#/components/schemas/Correction' }
+        curve:
+          nullable: true
+          type: object
+          required: [points, priced_count, observation_count, non_monotonic]
+          properties:
+            points:
+              type: array
+              items:
+                type: object
+                required: [size, priced]
+                properties:
+                  size: { $ref: '#/components/schemas/DecimalString' }
+                  rate: { $ref: '#/components/schemas/DecimalString' }
+                  priced: { type: boolean }
+                  reason: { type: string }
+            priced_count: { type: integer }
+            observation_count: { type: integer }
+            non_monotonic: { type: boolean }
+        rungs:
+          type: array
+          items: { $ref: '#/components/schemas/Rung' }
+        findings: { $ref: '#/components/schemas/Findings' }
+        ledger_range:
+          type: object
+          required: [first, last, span]
+          properties:
+            first: { type: integer, format: int64 }
+            last: { type: integer, format: int64 }
+            span: { type: integer, format: int64 }
+        measured_at: { type: string, format: date-time }
+    Trend:
+      type: object
+      required: [corridor, send_asset, receive_asset, reference_pair, count, runs, integrity_transitions, latest_transition, movements, divergence_stats]
+      properties:
+        corridor: { type: string }
+        send_asset: { $ref: '#/components/schemas/Asset' }
+        receive_asset: { $ref: '#/components/schemas/Asset' }
+        reference_pair: { type: string }
+        count: { type: integer }
+        next: { type: integer, format: int64 }
+        runs:
+          type: array
+          items: { $ref: '#/components/schemas/TrendRun' }
+        integrity_transitions:
+          type: array
+          items: { $ref: '#/components/schemas/IntegrityTransition' }
+        latest_transition:
+          nullable: true
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/IntegrityTransition'
+        movements:
+          type: array
+          items: { $ref: '#/components/schemas/Movement' }
+        divergence_stats: { $ref: '#/components/schemas/DivergenceStats' }
+    TrendRun:
+      type: object
+      required: [seq, recorded_at, integrity, depends_on, reference, floor_loss_pct, floor_size, worst_loss_pct, worst_size, finding, rungs]
+      properties:
+        seq: { type: integer, format: int64 }
+        recorded_at: { type: string, format: date-time }
+        integrity: { $ref: '#/components/schemas/Integrity' }
+        depends_on:
+          type: array
+          items: { type: string }
+        reference: { $ref: '#/components/schemas/TrendRef' }
+        floor_loss_pct: { $ref: '#/components/schemas/DecimalString' }
+        floor_size: { $ref: '#/components/schemas/DecimalString' }
+        worst_loss_pct: { $ref: '#/components/schemas/DecimalString' }
+        worst_size: { $ref: '#/components/schemas/DecimalString' }
+        recommended_size: { $ref: '#/components/schemas/DecimalString' }
+        finding: { type: string }
+        rungs:
+          type: array
+          items: { $ref: '#/components/schemas/TrendRung' }
+        correction: { $ref: '#/components/schemas/Correction' }
+    TrendRef:
+      type: object
+      required: [mid, source]
+      properties:
+        mid: { $ref: '#/components/schemas/DecimalString' }
+        source: { type: string }
+        as_of: { type: string, format: date-time }
+        secondary_mid: { $ref: '#/components/schemas/DecimalString' }
+        secondary_source: { type: string }
+        divergence_pct: { $ref: '#/components/schemas/DecimalString' }
+        scored_against: { type: string }
+    TrendRung:
+      type: object
+      required: [send_amount, priced]
+      properties:
+        send_amount: { $ref: '#/components/schemas/DecimalString' }
+        priced: { type: boolean }
+        loss_pct: { $ref: '#/components/schemas/DecimalString' }
+        verdict: { $ref: '#/components/schemas/Verdict' }
+    IntegrityTransition:
+      type: object
+      required: [previous_integrity, current_integrity, previous_run_at, current_run_at, previous_depends_on, current_depends_on, transition_type]
+      properties:
+        previous_integrity: { $ref: '#/components/schemas/Integrity' }
+        current_integrity: { $ref: '#/components/schemas/Integrity' }
+        previous_run_at: { type: string, format: date-time }
+        current_run_at: { type: string, format: date-time }
+        previous_depends_on:
+          type: array
+          items: { type: string }
+        current_depends_on:
+          type: array
+          items: { type: string }
+        transition_type:
+          type: string
+          enum: [INTEGRITY_STATE_CHANGE, DEPENDS_ON_CHANGED, UNKNOWN]
+    Movement:
+      type: object
+      required: [previous_run_at, current_run_at]
+      properties:
+        previous_run_at: { type: string, format: date-time }
+        current_run_at: { type: string, format: date-time }
+        benchmark_from: { $ref: '#/components/schemas/DecimalString' }
+        benchmark_to: { $ref: '#/components/schemas/DecimalString' }
+        corridor_from: { $ref: '#/components/schemas/DecimalString' }
+        corridor_to: { $ref: '#/components/schemas/DecimalString' }
+        benchmark_pct: { $ref: '#/components/schemas/DecimalString' }
+        corridor_pct: { $ref: '#/components/schemas/DecimalString' }
+        loss_pct_change: { $ref: '#/components/schemas/DecimalString' }
+    DivergenceStats:
+      type: object
+      required: [observation_count, determined]
+      properties:
+        observation_count: { type: integer }
+        determined: { type: boolean }
+        reason: { type: string }
+        mean_pct: { $ref: '#/components/schemas/DecimalString' }
+        stddev_pct: { $ref: '#/components/schemas/DecimalString' }
+        trend_direction:
+          type: string
+          enum: [improving, stable, worsening]
+        trend_magnitude_pct: { $ref: '#/components/schemas/DecimalString' }
+    ChainHeads:
+      type: object
+      required: [heads]
+      properties:
+        heads:
+          type: array
+          items:
+            type: object
+            required: [corridor, seq, recorded_at, hash]
+            properties:
+              corridor: { type: string }
+              seq: { type: integer, format: int64 }
+              recorded_at: { type: string, format: date-time }
+              hash: { type: string }
+    AssetsResponse:
+      type: object
+      required: [assets]
+      properties:
+        assets:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/Asset'
+              - type: object
+                required: [can_be_destination]
+                properties:
+                  can_be_destination: { type: boolean }
+                  state: { $ref: '#/components/schemas/AssetState' }
+    MarketStructure:
+      type: object
+      required: [issuer_concentrations, corridor_count, concentrated_corridor_count, generated_at]
+      properties:
+        issuer_concentrations:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
+        corridor_count: { type: integer }
+        concentrated_corridor_count: { type: integer }
+        generated_at: { type: string, format: date-time }
+    HealthCorridor:
+      type: object
+      required: [recorded_at, age_seconds, age_human]
+      properties:
+        recorded_at: { type: string, format: date-time }
+        age_seconds: { type: integer }
+        age_human: { type: string }
+    Health:
+      type: object
+      required: [status, code_commit, data_commit, data, freshness]
+      properties:
+        status: { type: string }
+        code_commit: { type: string }
+        data_commit: { type: string }
+        data:
+          nullable: true
+          type: object
+          additionalProperties: { $ref: '#/components/schemas/HealthCorridor' }
+        freshness:
+          type: object
+          required: [chain_head, newest_record_at, record_count]
+          properties:
+            chain_head:
+              nullable: true
+              type: integer
+              format: int64
+            newest_record_at:
+              nullable: true
+              type: string
+              format: date-time
+            record_count:
+              nullable: true
+              type: integer
